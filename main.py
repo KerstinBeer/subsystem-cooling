@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.sparse import csr_matrix, identity, kron, diags # use Compressed Sparse Row matrices
-from scipy.sparse.linalg import expm_multiply, eigs
+from scipy.sparse.linalg import expm_multiply, eigs, expm
 import matplotlib.pyplot as plt
 
 
@@ -311,7 +311,17 @@ def superoperator_trace_norm_difference(L_tilde, Phi_inf, t):
 
     return trace_norm
 
-###### plots ###### 
+def superoperator_frobenius_norm_difference(L_tilde, Phi_inf, t):
+    """
+    Frobenius norm of the difference between the dynamical map
+    at time t and its asymptotic limit.
+    """
+
+    D_t = expm(L_tilde * t) - Phi_inf
+
+    return np.linalg.norm(D_t, ord="fro")
+
+###### Time Evolution ######
 
 def plot_infidelity_time_evolution(n, steps=120, seed=1):
     """
@@ -446,13 +456,15 @@ def plot_infidelity_time_evolution(n, steps=120, seed=1):
 
     plt.close()
 
-def plot_superoperator_convergence(n, steps=50):
+###### Superoperator Convergence ######
+
+def plot_superoperator_convergence(n, steps=100):
     """
     Plot the convergence of the full dynamical map to its asymptotic map.
 
     The plotted quantity is
 
-        || exp(L t) - Phi_inf ||_1,
+        || exp(L t) - Phi_inf ||_F,
 
     where Phi_inf(X) = rho_ss Tr(X).
 
@@ -475,8 +487,8 @@ def plot_superoperator_convergence(n, steps=50):
             k=30
         )
 
-    # Simulate several relaxation times.
-    t_max = 6 / Delta
+    # Evolve for long enough to clearly reach the asymptotic regime.
+    t_max = 10 / Delta
 
     times = np.linspace(
         0,
@@ -484,9 +496,10 @@ def plot_superoperator_convergence(n, steps=50):
         steps + 1
     )
 
-    # Distance between the time-evolution map and its asymptotic limit.
-    trace_norms = np.array([
-        superoperator_trace_norm_difference(
+    # Frobenius norm of the difference between the dynamical map
+    # and its asymptotic limit.
+    frobenius_norms = np.array([
+        superoperator_frobenius_norm_difference(
             L_tilde,
             Phi_inf,
             t
@@ -494,55 +507,38 @@ def plot_superoperator_convergence(n, steps=50):
         for t in times
     ])
 
-    # Fit the late-time decay:
-    #
-    #     ||D(t)||_1 ~ C exp(-r t)
-    #
-    # so
-    #
-    #     log ||D(t)||_1 ~ log C - r t.
-    fit_mask = (
-        (times >= 2.5 / Delta)
-        & (times <= 5 / Delta)
-        & (trace_norms > 0)
-    )
-
-    slope, _ = np.polyfit(
-        times[fit_mask],
-        np.log(trace_norms[fit_mask]),
-        1
-    )
     print("\n")
     print(f"N = {n} | Superoperator convergence")
     print("Slow Liouvillian eigenvalue:", lambda_slow)
     print("Liouvillian gap Delta:", Delta)
-    print("Fitted asymptotic slope:", slope)
-    print("Expected slope -Delta:", -Delta)
+    print("Theoretical asymptotic slope:", -Delta)
+    print("Final Frobenius norm:", frobenius_norms[-1])
     print("\n")
 
-    # Reference decay exp(-Delta t), anchored at a late-time point
-    # so that the comparison tests the slope rather than the prefactor.
-    t_ref = 3 / Delta
+    # The theoretical decay rate is fixed by the Liouvillian gap.
+    # Only the vertical normalization is chosen from a late-time point.
+    t_ref = 6 / Delta
 
     ref_index = np.argmin(
         np.abs(times - t_ref)
     )
 
-    norm_ref = trace_norms[ref_index]
+    norm_ref = frobenius_norms[ref_index]
 
     reference_decay = norm_ref * np.exp(
         -Delta * (times - times[ref_index])
     )
 
-    # Plot
+    # Plot.
     fig, ax = plt.subplots(figsize=(5, 4))
 
     ax.plot(
         times,
-        trace_norms,
+        frobenius_norms,
         color=color1,
         linewidth=2,
-        label=r"$\|e^{\widetilde{\mathcal{L}}t}-\widetilde{\Phi}_{\infty}\|_1$"    )
+        label=r"$\|e^{\widetilde{\mathcal{L}}t}-\widetilde{\Phi}_{\infty}\|_F$"
+    )
 
     ax.plot(
         times,
@@ -554,7 +550,6 @@ def plot_superoperator_convergence(n, steps=50):
     )
 
     ax.set_yscale("log")
-
     ax.set_xlabel(r"$t$", fontsize=16)
 
     ax.tick_params(
@@ -562,17 +557,12 @@ def plot_superoperator_convergence(n, steps=50):
         labelsize=14
     )
 
-    ax.legend(
-        fontsize=13
-    )
+    ax.legend(fontsize=13)
 
     fig.tight_layout()
 
-    fit_name = format_float_for_filename(slope)
-    expected_name = format_float_for_filename(-Delta)
-
     fig.savefig(
-        f"superoperator_convergence_N{n}_fit{fit_name}_expected{expected_name}.png",
+        f"superoperator_convergence_N{n}.png",
         dpi=300,
         bbox_inches="tight"
     )
@@ -601,12 +591,12 @@ def single_excitation_effective_hamiltonian(n, gamma_1=1.0):
     edge_energy = (n - 3) / 4
     bulk_energy = (n - 5) / 4
 
-    # Diagonal terms from Sz_i Sz_{i+1}
+    # Diagonal terms from Sz_i Sz_{i+1}.
     diagonal = np.full(n, bulk_energy, dtype=complex)
     diagonal[0] = edge_energy
     diagonal[-1] = edge_energy - 1j * gamma_1 / 2
 
-    # Nearest-neighbour hopping from SxSx + SySy
+    # Nearest-neighbour hopping from SxSx + SySy.
     off_diagonal = np.full(n - 1, 0.5, dtype=complex)
 
     if n <= DENSE_CUTOFF:
@@ -633,11 +623,11 @@ def reduced_single_excitation_gap(n, gamma_1=1.0):
     H_eff = single_excitation_effective_hamiltonian(n, gamma_1)
 
     if n <= DENSE_CUTOFF:
-        # Full spectrum for small systems
+        # Full spectrum for small systems.
         eigenvalues = np.linalg.eigvals(H_eff)
 
     else:
-        # Only the eigenvalue with imaginary part closest to zero
+        # Only the eigenvalue with imaginary part closest to zero.
         eigenvalues = eigs(
             H_eff,
             k=1,
@@ -647,24 +637,41 @@ def reduced_single_excitation_gap(n, gamma_1=1.0):
             maxiter=100000
         )
 
-    # lambda_a = epsilon_a - i Gamma_a / 2
+    # mu_a = epsilon_a - i Gamma_a / 2
     decay_rates = -2 * np.imag(eigenvalues)
+
     Gamma_min = np.min(decay_rates)
 
-    # Liouvillian gap inferred from the single-excitation sector
+    # Liouvillian gap inferred from the single-excitation sector.
     Delta_reduced = Gamma_min / 2
 
     return Gamma_min, Delta_reduced
 
 
+def analytical_reduced_gap(n):
+    """
+    Large-n analytical prediction for gamma_1 = 1:
+
+        Delta_red(n) ~ pi^2 / (5 n^3)
+    """
+
+    n = np.asarray(n, dtype=float)
+
+    return np.pi**2 / (5 * n**3)
+
+
 def plot_gap_scaling():
     """
-    Calculate the reduced gap up to N = 1000 and fit its
-    large-N power-law scaling on a log-log plot.
+    Calculate the reduced gap up to n = 1000 and compare it with
+    the analytical large-n prediction
+
+        Delta_red(n) ~ pi^2 / (5 n^3).
+
+    No power-law fit is performed.
     """
 
     n_values = np.concatenate([
-        np.arange(2, 21),          # every N from 2 to 20
+        np.arange(2, 21),          # every n from 2 to 20
         np.arange(25, 101, 5),     # every 5 up to 100
         np.arange(120, 1001, 20)   # every 20 up to 1000
     ])
@@ -677,60 +684,65 @@ def plot_gap_scaling():
 
     Delta_values = np.array(Delta_values)
 
-    # Fit Delta(N) ~ N^slope in the large-N regime
-    fit_mask = n_values >= 20
+    # Analytical asymptotic prediction for gamma_1 = 1.
+    analytic_curve = analytical_reduced_gap(n_values)
 
-    slope, intercept = np.polyfit(
-        np.log(n_values[fit_mask]),
-        np.log(Delta_values[fit_mask]),
-        1
-    )
+    # Compare the largest numerical systems with the analytical result.
+    print("\nLarge-n comparison")
+    print("------------------")
 
-    fit_curve = np.exp(intercept) * n_values**slope
+    for n, Delta_num, Delta_analytic in zip(
+        n_values[-5:],
+        Delta_values[-5:],
+        analytic_curve[-5:]
+    ):
+        print(
+            f"n = {n:4d} | "
+            f"numerical = {Delta_num:.10e} | "
+            f"analytic = {Delta_analytic:.10e} | "
+            f"ratio = {Delta_num / Delta_analytic:.6f}"
+        )
 
-    print("Fitted power-law exponent:", slope)
-
-    # Plot
+    # Plot.
     fig, ax = plt.subplots(figsize=(5, 4))
 
-    # Numerical data
+    # Numerical data.
     ax.plot(
         n_values,
         Delta_values,
         "o",
         color=color1,
         markersize=4,
-        label=r"$\Delta_{\mathrm{red}}(N)$"
+        label=r"$\Delta_{\mathrm{red}}(n)$"
     )
 
-    # Power-law fit
+    # Analytical asymptotic prediction.
     ax.plot(
         n_values,
-        fit_curve,
+        analytic_curve,
         "--",
         color=color3,
         linewidth=2,
-        label=fr"fit: $N^{{{slope:.2f}}}$"
+        label=r"$\pi^2/(5n^3)$"
     )
 
     ax.set_xscale("log")
     ax.set_yscale("log")
 
-    ax.set_xlabel(r"$N$", fontsize=16)
-    #ax.set_ylabel(r"$\Delta_{\mathrm{red}}$", fontsize=16)
+    ax.set_xlabel(r"$n$", fontsize=16)
+    ax.set_ylabel(r"$\Delta_{\mathrm{red}}$", fontsize=16)
 
-    ax.tick_params(axis="both", labelsize=14)
-
-    ax.legend(
-        fontsize=12
+    ax.tick_params(
+        axis="both",
+        labelsize=14
     )
+
+    ax.legend(fontsize=12)
 
     fig.tight_layout()
 
-    slope_name = format_float_for_filename(slope)
-
     fig.savefig(
-        f"gap_scaling_fit{slope_name}.png",
+        "gap_scaling_analytic.png",
         dpi=300,
         bbox_inches="tight"
     )
@@ -744,11 +756,11 @@ if __name__ == "__main__":
 
     # Infidelity time evolution
     # for n in [2, 3, 4, 5]:
-    #     plot_infidelity_time_evolution(n)
+        # plot_infidelity_time_evolution(n)
 
     # Superoperator convergence
     # for n in [2, 3, 4]:
-    #     plot_superoperator_convergence(n)
+        # plot_superoperator_convergence(n)
 
     # Large-system gap scaling
     plot_gap_scaling()
