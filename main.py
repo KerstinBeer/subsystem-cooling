@@ -755,12 +755,12 @@ def plot_gap_scaling():
 if __name__ == "__main__":
 
     # Infidelity time evolution
-    # for n in [2, 3, 4, 5]:
-        # plot_infidelity_time_evolution(n)
+    for n in [2, 3, 4, 5]:
+        plot_infidelity_time_evolution(n)
 
     # Superoperator convergence
-    # for n in [2, 3, 4]:
-        # plot_superoperator_convergence(n)
+    for n in [2, 3, 4]:
+        plot_superoperator_convergence(n)
 
     # Large-system gap scaling
     plot_gap_scaling()
