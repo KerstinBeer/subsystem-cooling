@@ -805,15 +805,15 @@ def compare_full_and_reduced_gaps(n_values):
 if __name__ == "__main__":
 
     # Infidelity time evolution
-    # for n in [2, 3, 4, 5]:
-    #     plot_infidelity_time_evolution(n)
+    for n in [2, 3, 4, 5]:
+        plot_infidelity_time_evolution(n)
 
     # Superoperator convergence
     # for n in [2, 3, 4]:
-    #     plot_superoperator_convergence(n)
+        plot_superoperator_convergence(n)
+
+    # Large-system gap scaling
+    plot_gap_scaling()
 
     # Compare full Liouvillian and reduced gaps
     compare_full_and_reduced_gaps([2, 3, 4, 5, 6, 7, 8])
-
-    # # Large-system gap scaling
-    # plot_gap_scaling()
