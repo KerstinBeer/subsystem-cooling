@@ -616,8 +616,11 @@ def single_excitation_effective_hamiltonian(n, gamma_1=1.0):
 
 def reduced_single_excitation_gap(n, gamma_1=1.0):
     """
-    Calculate the smallest single-excitation decay rate Gamma_min
-    and the Liouvillian gap inferred from it.
+    Calculate the reduced single-excitation gap
+
+        Delta_red = min_a[-Im(mu_a)],
+
+    where mu_a are the eigenvalues of H_eff.
     """
 
     H_eff = single_excitation_effective_hamiltonian(n, gamma_1)
@@ -627,7 +630,7 @@ def reduced_single_excitation_gap(n, gamma_1=1.0):
         eigenvalues = np.linalg.eigvals(H_eff)
 
     else:
-        # Only the eigenvalue with imaginary part closest to zero.
+        # Eigenvalue whose imaginary part is closest to zero.
         eigenvalues = eigs(
             H_eff,
             k=1,
@@ -637,15 +640,9 @@ def reduced_single_excitation_gap(n, gamma_1=1.0):
             maxiter=100000
         )
 
-    # mu_a = epsilon_a - i Gamma_a / 2
-    decay_rates = -2 * np.imag(eigenvalues)
+    Delta_reduced = np.min(-np.imag(eigenvalues))
 
-    Gamma_min = np.min(decay_rates)
-
-    # Liouvillian gap inferred from the single-excitation sector.
-    Delta_reduced = Gamma_min / 2
-
-    return Gamma_min, Delta_reduced
+    return Delta_reduced
 
 
 def analytical_reduced_gap(n):
@@ -679,7 +676,7 @@ def plot_gap_scaling():
     Delta_values = []
 
     for n in n_values:
-        _, Delta_reduced = reduced_single_excitation_gap(n)
+        Delta_reduced = reduced_single_excitation_gap(n)
         Delta_values.append(Delta_reduced)
 
     Delta_values = np.array(Delta_values)
@@ -749,18 +746,74 @@ def plot_gap_scaling():
 
     plt.close(fig)
 
+###### Full Liouvillian vs reduced gap comparison ######
+
+def compare_full_and_reduced_gaps(n_values):
+    """
+    Compare the full Liouvillian gap Delta with the reduced
+    single-excitation gap Delta_red.
+
+    Dense diagonalization is used for n <= 5.
+    Sparse diagonalization is used for larger systems.
+    """
+
+    print("\nFull Liouvillian vs reduced single-excitation gap")
+    print("-------------------------------------------------")
+
+    results = []
+
+    for n in n_values:
+        print(f"\nCalculating n = {n} ...")
+
+        # Full Liouvillian
+        L_tilde = liouvillian_matrix(n)
+
+        if n <= 5:
+            Delta, lambda_slow = liouvillian_gap_dense(L_tilde)
+        else:
+            Delta, lambda_slow = liouvillian_gap_sparse(
+                L_tilde,
+                k=8
+            )
+
+        # Reduced single-excitation result
+        Delta_red = reduced_single_excitation_gap(n)
+
+        absolute_difference = abs(Delta - Delta_red)
+        relative_difference = absolute_difference / Delta
+
+        results.append(
+            (
+                n,
+                Delta,
+                Delta_red,
+                absolute_difference,
+                relative_difference
+            )
+        )
+
+        print(f"Full gap Delta       = {Delta:.15e}")
+        print(f"Reduced gap Delta_red = {Delta_red:.15e}")
+        print(f"Absolute difference   = {absolute_difference:.3e}")
+        print(f"Relative difference   = {relative_difference:.3e}")
+        print(f"Slow eigenvalue        = {lambda_slow}")
+
+    return results
 
 ###### Main ######
 
 if __name__ == "__main__":
 
     # Infidelity time evolution
-    for n in [2, 3, 4, 5]:
-        plot_infidelity_time_evolution(n)
+    # for n in [2, 3, 4, 5]:
+    #     plot_infidelity_time_evolution(n)
 
     # Superoperator convergence
-    for n in [2, 3, 4]:
-        plot_superoperator_convergence(n)
+    # for n in [2, 3, 4]:
+    #     plot_superoperator_convergence(n)
 
-    # Large-system gap scaling
-    plot_gap_scaling()
+    # Compare full Liouvillian and reduced gaps
+    compare_full_and_reduced_gaps([2, 3, 4, 5, 6, 7, 8])
+
+    # # Large-system gap scaling
+    # plot_gap_scaling()
